@@ -1,6 +1,76 @@
 import jsPDF from 'jspdf';
 import { type Invoice } from '../db/db';
 
+// Helper to draw a stylized Indian Rupee symbol (₹) inline via vector paths since standard fonts lack it.
+function drawRupee(doc: jsPDF, x: number, y: number, fontSize: number = 9) {
+  const oldWidth = doc.getLineWidth();
+  const oldColor = doc.getDrawColor();
+  
+  // Set stroke style matching text color
+  doc.setDrawColor(31, 41, 55);
+  doc.setLineWidth(0.22);
+  
+  const scale = fontSize / 9;
+  const w = 1.5 * scale;
+  const h = 2.0 * scale;
+  
+  const topY = y - h;
+  const midY = y - h * 0.55;
+  const botY = y;
+  
+  // Top horizontal bar
+  doc.line(x, topY, x + w, topY);
+  // Middle horizontal bar
+  doc.line(x, topY + (midY - topY) * 0.45, x + w * 0.8, topY + (midY - topY) * 0.45);
+  
+  // vertical back stem
+  doc.line(x + w * 0.15, topY, x + w * 0.15, midY);
+  
+  // curve
+  doc.line(x + w * 0.15, topY, x + w * 0.75, topY);
+  doc.line(x + w * 0.75, topY, x + w * 0.75, midY - h * 0.15);
+  doc.line(x + w * 0.75, midY - h * 0.15, x + w * 0.15, midY);
+  
+  // Slanted leg
+  doc.line(x + w * 0.3, midY, x + w * 0.75, botY);
+  
+  // Restore drawing state
+  doc.setLineWidth(oldWidth);
+  doc.setDrawColor(oldColor);
+}
+
+// Helper to write formatted Indian currency text right-aligned and draw the Rupee symbol just to its left.
+function writeCurrencyText(
+  doc: jsPDF, 
+  val: number, 
+  x: number, 
+  y: number, 
+  fontSize: number = 9, 
+  showSign: boolean = false
+) {
+  // Format the absolute numeric value as standard Indian currency (e.g. 13,250.00)
+  const formattedVal = new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Math.abs(val));
+  
+  let prefix = '';
+  if (showSign) {
+    prefix = val < 0 ? '-' : val > 0 ? '+' : '';
+  }
+  
+  const fullText = prefix ? `${prefix}${formattedVal}` : formattedVal;
+  
+  // Render number text right-aligned at x
+  doc.text(fullText, x, y, { align: 'right' });
+  
+  // Calculate width of the numeric value only, to position Rupee symbol correctly in front
+  const textWidth = doc.getTextWidth(formattedVal);
+  
+  // Draw the Rupee symbol just left of the numeric text
+  drawRupee(doc, x - textWidth - 2.2, y, fontSize);
+}
+
 export function downloadInvoicePDF(inv: Invoice, shopDetails: Record<string, any>) {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -11,7 +81,6 @@ export function downloadInvoicePDF(inv: Invoice, shopDetails: Record<string, any
   const primaryColor = [37, 99, 235]; // Royal Blue
   const darkGray = [31, 41, 55];
   const lightGray = [243, 244, 246];
-  const currencySymbol = shopDetails.currency || '₹';
 
   // Helper functions for layouts
   const drawLine = (y: number) => {
@@ -104,9 +173,13 @@ export function downloadInvoicePDF(inv: Invoice, shopDetails: Record<string, any
     doc.text(prodNameLines, 30, y);
     
     doc.text(`${item.quantity} ${item.unit}`, 105, y, { align: 'right' });
-    doc.text(`${currencySymbol}${item.sellingPrice.toFixed(2)}`, 125, y, { align: 'right' });
+    
+    // Format selling price and total in Indian currency format with drawn Rupee symbol
+    writeCurrencyText(doc, item.sellingPrice, 125, y, 9);
+    
     doc.text(`${item.gstRate}%`, 145, y, { align: 'right' });
-    doc.text(`${currencySymbol}${item.subtotal.toFixed(2)}`, 190, y, { align: 'right' });
+    
+    writeCurrencyText(doc, item.subtotal, 190, y, 9);
 
     y += Math.max(prodNameLines.length * 4.5, 6);
   });
@@ -134,28 +207,28 @@ export function downloadInvoicePDF(inv: Invoice, shopDetails: Record<string, any
   doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
   
   doc.text('Subtotal (excl. Tax):', 150, y, { align: 'right' });
-  doc.text(`${currencySymbol}${inv.subtotal.toFixed(2)}`, 190, y, { align: 'right' });
+  writeCurrencyText(doc, inv.subtotal, 190, y, 9);
   y += 5;
 
   doc.text('Tax (CGST + SGST split):', 150, y, { align: 'right' });
-  doc.text(`${currencySymbol}${inv.gstTotal.toFixed(2)}`, 190, y, { align: 'right' });
+  writeCurrencyText(doc, inv.gstTotal, 190, y, 9);
   y += 5;
 
   if (inv.discount > 0) {
     doc.text('Discount Applied:', 150, y, { align: 'right' });
-    doc.text(`-${currencySymbol}${inv.discount.toFixed(2)}`, 190, y, { align: 'right' });
+    writeCurrencyText(doc, inv.discount, 190, y, 9, true);
     y += 5;
   }
 
   doc.text('Round Off:', 150, y, { align: 'right' });
-  doc.text(`${inv.roundOff > 0 ? '+' : ''}${inv.roundOff.toFixed(2)}`, 190, y, { align: 'right' });
+  writeCurrencyText(doc, inv.roundOff, 190, y, 9, true);
   y += 6;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
   doc.text('GRAND TOTAL:', 150, y, { align: 'right' });
-  doc.text(`${currencySymbol}${inv.grandTotal.toFixed(2)}`, 190, y, { align: 'right' });
+  writeCurrencyText(doc, inv.grandTotal, 190, y, 11);
 
   y += 12;
 
