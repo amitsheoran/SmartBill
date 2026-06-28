@@ -46,6 +46,8 @@ export interface Invoice {
   roundOff: number;
   amountInWords: string;
   paymentMode: 'Cash' | 'UPI' | 'Card' | 'Credit';
+  isGst?: boolean;
+  billingGstin?: string;
 }
 
 export interface Customer {

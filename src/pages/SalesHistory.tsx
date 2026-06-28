@@ -136,11 +136,16 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ shopDetails, currenc
     const phone = inv.customerPhone.replace(/\D/g, '');
     const countryCode = phone.length === 10 ? '91' + phone : phone;
 
+    const isGstInvoice = inv.isGst !== undefined ? inv.isGst : (inv.gstTotal > 0);
+
     const itemsText = inv.items.map(item => 
-      `• ${item.productName} - ${item.quantity} ${item.unit} x ₹${item.sellingPrice} = ₹${item.subtotal}`
+      isGstInvoice 
+        ? `• ${item.productName} - ${item.quantity} ${item.unit} x ₹${item.sellingPrice} (incl. GST) = ₹${item.subtotal}`
+        : `• ${item.productName} - ${item.quantity} ${item.unit} x ₹${item.sellingPrice} = ₹${item.subtotal}`
     ).join('\n');
 
-    const message = `*INVOICE: ${inv.invoiceNumber}*\n\nHello *${inv.customerName}*,\nThank you for shopping at *${shopDetails.businessName || 'Shop'}*.\n\n*Bill Summary:*\n${itemsText}\n\n*GST Tax Content:* ₹${inv.gstTotal}\n*Discount:* ₹${inv.discount}\n*Grand Total:* *₹${inv.grandTotal}*\n*Payment Mode:* ${inv.paymentMode}\n\nHave a great day!`;
+    const gstLine = isGstInvoice ? `\n*GST Tax Content:* ₹${inv.gstTotal}` : '';
+    const message = `*INVOICE: ${inv.invoiceNumber}*\n\nHello *${inv.customerName}*,\nThank you for shopping at *${shopDetails.businessName || 'Shop'}*.\n\n*Bill Summary:*\n${itemsText}${gstLine}\n*Discount:* ₹${inv.discount}\n*Grand Total:* *₹${inv.grandTotal}*\n*Payment Mode:* ${inv.paymentMode}\n\nHave a great day!`;
 
     return `https://api.whatsapp.com/send?phone=${countryCode}&text=${encodeURIComponent(message)}`;
   };
@@ -274,65 +279,76 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ shopDetails, currenc
                 </div>
 
                 {/* Expanded Invoice Detail View */}
-                {isExpanded && (
-                  <div className="border-t bg-slate-50/50 dark:bg-slate-900/10 p-5 space-y-5 animate-fadeIn">
-                    
-                    {/* Invoice Products list */}
-                    <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-slate-900 border-b text-[10px] font-black uppercase text-muted-foreground">
-                            <th className="text-left px-4 py-2">Item Description</th>
-                            <th className="text-center px-4 py-2 w-20">Qty</th>
-                            <th className="text-right px-4 py-2">Rate</th>
-                            <th className="text-right px-4 py-2">GST</th>
-                            <th className="text-right px-4 py-2">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {inv.items.map((item, i) => (
-                            <tr key={i} className="hover:bg-muted/20">
-                              <td className="px-4 py-3 font-semibold">{item.productName}</td>
-                              <td className="px-4 py-3 text-center font-bold">{item.quantity} {item.unit}</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground">{currencySymbol}{item.sellingPrice.toFixed(2)}</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground">{item.gstRate}%</td>
-                              <td className="px-4 py-3 text-right font-bold">{currencySymbol}{item.subtotal.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Tax & Totals Breakdown Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                {isExpanded && (() => {
+                  const isGstInvoice = inv.isGst !== undefined ? inv.isGst : (inv.gstTotal > 0);
+                  return (
+                    <div className="border-t bg-slate-50/50 dark:bg-slate-900/10 p-5 space-y-5 animate-fadeIn">
                       
-                      {/* Left: Invoice words & Info */}
-                      <div className="md:col-span-7 flex flex-col justify-between">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Amount In Words</p>
-                          <p className="text-xs font-bold text-muted-foreground mt-0.5">{inv.amountInWords}</p>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground mt-4 font-medium">
-                          Created on {new Date(inv.dateTime).toLocaleString('en-IN')}
-                        </div>
+                      {/* Invoice Products list */}
+                      <div className="bg-card border rounded-xl overflow-hidden shadow-sm">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-slate-100 dark:bg-slate-900 border-b text-[10px] font-black uppercase text-muted-foreground">
+                              <th className="text-left px-4 py-2">Item Description</th>
+                              <th className="text-center px-4 py-2 w-20">Qty</th>
+                              <th className="text-right px-4 py-2">Rate</th>
+                              {isGstInvoice && <th className="text-right px-4 py-2">GST</th>}
+                              <th className="text-right px-4 py-2">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {inv.items.map((item, i) => (
+                              <tr key={i} className="hover:bg-muted/20">
+                                <td className="px-4 py-3 font-semibold">{item.productName}</td>
+                                <td className="px-4 py-3 text-center font-bold">{item.quantity} {item.unit}</td>
+                                <td className="px-4 py-3 text-right text-muted-foreground">{currencySymbol}{item.sellingPrice.toFixed(2)}</td>
+                                {isGstInvoice && <td className="px-4 py-3 text-right text-muted-foreground">{item.gstRate}%</td>}
+                                <td className="px-4 py-3 text-right font-bold">{currencySymbol}{item.subtotal.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
 
-                      {/* Right: Tax Breakdown */}
-                      <div className="md:col-span-5 bg-card border rounded-xl p-4 shadow-sm space-y-1.5 text-xs">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Subtotal (Excl. Tax):</span>
-                          <span>{currencySymbol}{inv.subtotal.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Total Tax (CGST + SGST):</span>
-                          <span>{currencySymbol}{inv.gstTotal.toFixed(2)}</span>
-                        </div>
-                        {inv.discount > 0 && (
-                          <div className="flex justify-between text-green-600 font-medium">
-                            <span>Discount Applied:</span>
-                            <span>-{currencySymbol}{inv.discount.toFixed(2)}</span>
+                      {/* Tax & Totals Breakdown Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        
+                        {/* Left: Invoice words & Info */}
+                        <div className="md:col-span-7 flex flex-col justify-between">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Amount In Words</p>
+                            <p className="text-xs font-bold text-muted-foreground mt-0.5">{inv.amountInWords}</p>
                           </div>
-                        )}
+                          <div className="text-[10px] text-muted-foreground mt-4 font-medium">
+                            Created on {new Date(inv.dateTime).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+
+                        {/* Right: Tax Breakdown */}
+                        <div className="md:col-span-5 bg-card border rounded-xl p-4 shadow-sm space-y-1.5 text-xs">
+                          {isGstInvoice ? (
+                            <>
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>Subtotal (Excl. Tax):</span>
+                                <span>{currencySymbol}{inv.subtotal.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>Total Tax (CGST + SGST):</span>
+                                <span>{currencySymbol}{inv.gstTotal.toFixed(2)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Subtotal:</span>
+                              <span>{currencySymbol}{inv.items.reduce((acc, item) => acc + item.subtotal, 0).toFixed(2)}</span>
+                            </div>
+                          )}
+                          {inv.discount > 0 && (
+                            <div className="flex justify-between text-green-600 font-medium">
+                              <span>Discount Applied:</span>
+                              <span>-{currencySymbol}{inv.discount.toFixed(2)}</span>
+                            </div>
+                          )}
                         <div className="flex justify-between text-muted-foreground border-b pb-1.5">
                           <span>Round Off:</span>
                           <span>{inv.roundOff > 0 ? '+' : ''}{inv.roundOff.toFixed(2)}</span>
@@ -376,8 +392,9 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ shopDetails, currenc
 
                     </div>
 
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
 
               </div>
             );

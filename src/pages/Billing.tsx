@@ -37,6 +37,10 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
   const [customerName, setCustomerName] = useState('');
   const [showCustomerSug, setShowCustomerSug] = useState(false);
 
+  // GST Toggle & GSTIN States
+  const [invoiceType, setInvoiceType] = useState<'gst' | 'non-gst'>('gst');
+  const [billingGstin, setBillingGstin] = useState('');
+
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
@@ -69,6 +73,17 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
   useEffect(() => {
     generateInvoiceNum();
   }, []);
+
+  // Sync GSTIN state with settings profile
+  useEffect(() => {
+    if (shopDetails.gstin) {
+      setBillingGstin(shopDetails.gstin);
+      setInvoiceType('gst');
+    } else {
+      setBillingGstin('');
+      setInvoiceType('non-gst');
+    }
+  }, [shopDetails]);
 
   const generateInvoiceNum = async () => {
     const prefix = shopDetails.invoicePrefix || 'SB';
@@ -290,14 +305,14 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
     const totalAfterDiscount = itemsTotal - discountAmount;
     
     // Tax is included. Let's compute total tax collected
-    const totalGst = billItems.reduce((acc, item) => {
+    const totalGst = invoiceType === 'gst' ? billItems.reduce((acc, item) => {
       // Calculate fraction of discount for this item
       const itemRatio = itemsTotal > 0 ? item.subtotal / itemsTotal : 0;
       const itemDiscount = discountAmount * itemRatio;
       const itemNet = item.subtotal - itemDiscount;
       const itemTaxable = itemNet / (1 + item.gstRate / 100);
       return acc + (itemNet - itemTaxable);
-    }, 0);
+    }, 0) : 0;
 
     const roundedTotal = Math.round(totalAfterDiscount);
     const roundOff = parseFloat((roundedTotal - totalAfterDiscount).toFixed(2));
@@ -475,9 +490,14 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
       validationErrors.push("Please add at least one item to generate bill.");
     }
 
+    // Business GST number is mandatory if GST Invoice is selected
+    if (invoiceType === 'gst' && !billingGstin.trim()) {
+      validationErrors.push("Business GST number (GSTIN) is mandatory for GST Invoice.");
+    }
+
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
-      speakNotification("Billing failed. Add items first.");
+      speakNotification("Billing failed. Please check validation errors.");
       return;
     }
 
@@ -494,7 +514,9 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
         grandTotal,
         roundOff,
         amountInWords,
-        paymentMode
+        paymentMode,
+        isGst: invoiceType === 'gst',
+        billingGstin: invoiceType === 'gst' ? billingGstin.trim() : ''
       };
 
       // Add to IndexedDB
@@ -554,6 +576,13 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
     setSuccessMsg('');
     setErrors([]);
     setShowShareModal(false);
+    if (shopDetails.gstin) {
+      setBillingGstin(shopDetails.gstin);
+      setInvoiceType('gst');
+    } else {
+      setBillingGstin('');
+      setInvoiceType('non-gst');
+    }
     generateInvoiceNum();
   };
 
@@ -579,6 +608,30 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto px-4 pb-12">
+      {/* Invoice Mode Selection Toggle */}
+      <div className="bg-card text-card-foreground border rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h3 className="font-extrabold text-base tracking-tight text-primary">Invoice Mode Selection</h3>
+          <p className="text-xs text-muted-foreground">Select whether this invoice will carry tax split details or is a standard cash receipt.</p>
+        </div>
+        <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border">
+          <button
+            type="button"
+            onClick={() => setInvoiceType('gst')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 ${invoiceType === 'gst' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}
+          >
+            GST Invoice
+          </button>
+          <button
+            type="button"
+            onClick={() => setInvoiceType('non-gst')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 ${invoiceType === 'non-gst' ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}
+          >
+            Non-GST Invoice
+          </button>
+        </div>
+      </div>
+
       {/* Messages */}
       {successMsg && (
         <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-3">
@@ -662,6 +715,23 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
                   className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background"
                 />
               </div>
+
+              {/* Business GSTIN (only shown for GST Invoice) */}
+              {invoiceType === 'gst' && (
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                    Business GSTIN <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="Enter Business GSTIN (e.g. 07AAAAA1111A1Z2)"
+                    value={billingGstin}
+                    onChange={(e) => setBillingGstin(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background font-bold tracking-wider"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -791,7 +861,7 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
                       <th className="text-left pb-2 font-semibold">Item</th>
                       <th className="text-center pb-2 w-20 font-semibold">Qty</th>
                       <th className="text-right pb-2 font-semibold">Rate</th>
-                      <th className="text-right pb-2 font-semibold">GST</th>
+                      {invoiceType === 'gst' && <th className="text-right pb-2 font-semibold">GST</th>}
                       <th className="text-right pb-2 font-semibold">Total</th>
                       <th className="text-center pb-2 w-8"></th>
                     </tr>
@@ -818,10 +888,12 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
                         <td className="py-3 text-right font-semibold">
                           {shopDetails.currency}{item.sellingPrice.toFixed(2)}
                         </td>
-                        <td className="py-3 text-right text-[10px] text-muted-foreground">
-                          {item.gstRate}%
-                          <span className="block text-[8px]">({shopDetails.currency}{item.gstAmount.toFixed(2)})</span>
-                        </td>
+                        {invoiceType === 'gst' && (
+                          <td className="py-3 text-right text-[10px] text-muted-foreground">
+                            {item.gstRate}%
+                            <span className="block text-[8px]">({shopDetails.currency}{item.gstAmount.toFixed(2)})</span>
+                          </td>
+                        )}
                         <td className="py-3 text-right font-bold text-sm">
                           {shopDetails.currency}{item.subtotal.toFixed(2)}
                         </td>
@@ -884,14 +956,23 @@ export const Billing: React.FC<BillingProps> = ({ shopDetails }) => {
 
                 {/* Calculation Rows */}
                 <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border space-y-2">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Taxable Amount (Excl. Tax):</span>
-                    <span>{shopDetails.currency}{subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>GST Tax (CGST + SGST):</span>
-                    <span>{shopDetails.currency}{gstTotal.toFixed(2)}</span>
-                  </div>
+                  {invoiceType === 'gst' ? (
+                    <>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Taxable Amount (Excl. Tax):</span>
+                        <span>{shopDetails.currency}{subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>GST Tax (CGST + SGST):</span>
+                        <span>{shopDetails.currency}{gstTotal.toFixed(2)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Subtotal:</span>
+                      <span>{shopDetails.currency}{(subtotal + discount).toFixed(2)}</span>
+                    </div>
+                  )}
                   {discount > 0 && (
                     <div className="flex justify-between text-xs text-green-600 font-medium">
                       <span>Discount Amount:</span>
