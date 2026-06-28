@@ -7,7 +7,8 @@ import {
   Edit3, 
   Trash2, 
   AlertTriangle, 
-  ShoppingBag
+  ShoppingBag,
+  Copy
 } from 'lucide-react';
 
 interface InventoryProps {
@@ -82,6 +83,22 @@ export const Inventory: React.FC<InventoryProps> = ({ currencySymbol }) => {
     setName(p.name);
     setCategory(p.category);
     setSku(p.sku || '');
+    setPurchasePrice(String(p.purchasePrice));
+    setSellingPrice(String(p.sellingPrice));
+    setUnit(p.unit);
+    setGstRate(String(p.gstRate));
+    setStock(String(p.stock));
+    setLowStockLimit(String(p.lowStockLimit));
+    setSupplierName(p.supplierName || '');
+    setIsModalOpen(true);
+  };
+
+  // Open modal for copying/duplicating product
+  const openCopyModal = (p: Product) => {
+    setEditingProduct(null);
+    setName(`${p.name} - Copy`);
+    setCategory(p.category);
+    setSku(p.sku ? `${p.sku}-copy` : '');
     setPurchasePrice(String(p.purchasePrice));
     setSellingPrice(String(p.sellingPrice));
     setUnit(p.unit);
@@ -299,6 +316,13 @@ export const Inventory: React.FC<InventoryProps> = ({ currencySymbol }) => {
                             <Edit3 className="h-3.5 w-3.5" />
                           </button>
                           <button 
+                            onClick={() => openCopyModal(p)}
+                            className="p-1.5 rounded-lg border hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition active:scale-90"
+                            title="Duplicate/Copy"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <button 
                             onClick={() => p.id && handleDeleteProduct(p.id)}
                             className="p-1.5 rounded-lg border border-red-200 dark:border-red-950 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 transition active:scale-90"
                             title="Delete"
@@ -322,7 +346,7 @@ export const Inventory: React.FC<InventoryProps> = ({ currencySymbol }) => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card text-card-foreground border rounded-2xl max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
             <h3 className="font-extrabold text-lg border-b pb-2 mb-4">
-              {editingProduct ? 'Edit Product Details' : 'Add New Product'}
+              {editingProduct ? 'Edit Product Details' : name.includes('Copy') ? 'Copy / Add Product' : 'Add New Product'}
             </h3>
 
             <form onSubmit={handleSaveProduct} className="space-y-4">
