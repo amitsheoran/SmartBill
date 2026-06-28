@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/SmartBill/',
   plugins: [
     react(),
     VitePWA({
@@ -18,7 +19,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         start_url: '.',
-        scope: '/',
+        scope: '/SmartBill/',
         icons: [
           {
             src: 'icon-192.png',
